@@ -1,24 +1,29 @@
-FROM  public.ecr.aws/docker/library/node:18.14.2-alpine3.17
+FROM public.ecr.aws/docker/library/python:3.10-slim-bullseye
 
-ARG REACT_APP_MOVIE_API_URL
-ENV REACT_APP_MOVIE_API_URL=${REACT_APP_MOVIE_API_URL}
+ENV FLASK_RUN_HOST=0.0.0.0
 
-WORKDIR /app
+WORKDIR /
 
-# Copy dependdency files
-COPY package*.json ./
+RUN useradd -u 1000 -m app
 
-# Install packages
-RUN npm ci
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends \
+    build-essential \
+    gcc \
+    python3-dev \
+    libpcre3 \
+    libpcre3-dev \
+    libssl-dev \
+    libffi-dev && \
+    pip install pipenv && \
+    rm -rf /var/lib/apt/lists/*
 
-# Copy code
-COPY . .
+RUN mkdir -p /var/www/app /app
 
-# Build the app
-RUN npm run build
+COPY Pipfile* /app/
 
-# Expose the port used by the React app
-EXPOSE 3000
+RUN cd /app && pipenv install --system --deploy
 
-# Start the React app when the container starts
-CMD ["npm", "run", "serve"]
+COPY . /app
+
+CMD ["uwsgi", "--http", ":5000", "--master", "--enable-threads", "-s", "/var/www/app/app.sock", "--manage-script-name", "--mount", "/=app:app"]
